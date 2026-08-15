@@ -11,13 +11,23 @@ import {
   Info,
   Building2,
   MessageCircle,
+  Eye,
+  Image as ImageIcon,
+  Globe,
+  NotebookPen,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { PriorityBadge } from "@/components/analyzer/priority-badge";
-import type { AnalysisResult } from "@/lib/schema";
+import { PriorityBadge, ConfidenceBadge } from "@/components/analyzer/priority-badge";
+import type { AnalysisResult, Observation } from "@/lib/schema";
 import { cn } from "@/lib/utils";
+
+const OBSERVATION_SOURCE_META: Record<Observation["source"], { label: string; icon: typeof ImageIcon }> = {
+  screenshot: { label: "user-provided screenshot", icon: ImageIcon },
+  website: { label: "website", icon: Globe },
+  notes: { label: "notes", icon: NotebookPen },
+};
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -31,6 +41,7 @@ function DataLimitationsBanner({ result }: { result: AnalysisResult }) {
     { label: "Facebook", available: result.dataAvailability.facebook },
     { label: "Instagram", available: result.dataAvailability.instagram },
     { label: "Notes", available: result.dataAvailability.notes },
+    { label: "Screenshots", available: result.dataAvailability.screenshots },
   ];
 
   return (
@@ -55,6 +66,36 @@ function DataLimitationsBanner({ result }: { result: AnalysisResult }) {
         <p className="text-xs leading-relaxed text-zinc-500">{result.dataLimitationsNote}</p>
       </div>
     </div>
+  );
+}
+
+function ObservedSection({ result }: { result: AnalysisResult }) {
+  if (result.observations.length === 0) return null;
+
+  return (
+    <Card className="border-zinc-800 bg-zinc-900/40 p-6">
+      <div className="mb-4 flex items-center gap-2 text-zinc-500">
+        <Eye className="size-4" />
+        <SectionLabel>What We Can See</SectionLabel>
+      </div>
+      <ul className="space-y-2.5">
+        {result.observations.map((observation, index) => {
+          const meta = OBSERVATION_SOURCE_META[observation.source];
+          const SourceIcon = meta.icon;
+          return (
+            <li key={index} className="flex items-start gap-2.5">
+              <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-zinc-800/70 text-zinc-500">
+                <SourceIcon className="size-3" />
+              </span>
+              <div>
+                <p className="text-sm leading-relaxed text-zinc-300">{observation.text}</p>
+                <p className="text-[11px] text-zinc-600">Source: {meta.label}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
   );
 }
 
@@ -105,6 +146,7 @@ function TopOpportunity({ result }: { result: AnalysisResult }) {
           {topOpportunity.title}
         </h3>
         <PriorityBadge priority={topOpportunity.priority} />
+        <ConfidenceBadge confidence={topOpportunity.confidence} />
       </div>
 
       <div className="mt-4 space-y-1">
@@ -137,7 +179,10 @@ function OpportunityCard({ opportunity }: { opportunity: AnalysisResult["opportu
     <Card className="border-zinc-800 bg-zinc-900/40 p-5">
       <div className="flex items-start justify-between gap-2">
         <h4 className="text-sm font-semibold tracking-wide text-zinc-100">{opportunity.title}</h4>
-        <PriorityBadge priority={opportunity.priority} />
+        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+          <PriorityBadge priority={opportunity.priority} />
+          <ConfidenceBadge confidence={opportunity.confidence} />
+        </div>
       </div>
       <p className="mt-3 text-xs text-zinc-500">Possible need</p>
       <p className="text-sm text-zinc-300">{opportunity.possibleNeed}</p>
@@ -266,6 +311,7 @@ export function ResultView({
       )}
 
       <DataLimitationsBanner result={result} />
+      <ObservedSection result={result} />
       <BusinessSnapshot result={result} />
       <TopOpportunity result={result} />
 

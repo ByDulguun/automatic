@@ -18,17 +18,24 @@ export default function Home() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(input: AnalyzeInput) {
+  async function handleSubmit(input: AnalyzeInput, screenshots: File[]) {
     setStatus("loading");
     setError(null);
 
     const start = Date.now();
 
     try {
+      const formData = new FormData();
+      for (const [key, value] of Object.entries(input)) {
+        formData.set(key, value);
+      }
+      for (const file of screenshots) {
+        formData.append("screenshots", file);
+      }
+
       const res = await fetch("/api/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
+        body: formData,
       });
 
       const body = await res.json();
