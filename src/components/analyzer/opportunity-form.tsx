@@ -2,13 +2,28 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Link2, Globe, NotebookPen, Sparkles, ChevronDown, Tag, ShoppingBag, Eye } from "lucide-react";
+import {
+  Link2,
+  Globe,
+  NotebookPen,
+  Sparkles,
+  ChevronDown,
+  Tag,
+  ShoppingBag,
+  Eye,
+  Copy,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { ScreenshotUploader } from "@/components/analyzer/screenshot-uploader";
+import { ClaudeProPanel } from "@/components/analyzer/claude-pro-panel";
+import { buildManualClaudePrompt } from "@/lib/claude-pro-prompt";
 import type { AnalyzeInput } from "@/lib/schema";
+import { cn } from "@/lib/utils";
+
+type Mode = "automatic" | "claude-pro";
 
 type Props = {
   onSubmit: (input: AnalyzeInput, screenshots: File[]) => void;
@@ -16,6 +31,7 @@ type Props = {
 };
 
 export function OpportunityForm({ onSubmit, disabled }: Props) {
+  const [mode, setMode] = useState<Mode>("automatic");
   const [facebookUrl, setFacebookUrl] = useState("");
   const [instagramUrl, setInstagramUrl] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
@@ -26,6 +42,7 @@ export function OpportunityForm({ onSubmit, disabled }: Props) {
   const [whatTheySell, setWhatTheySell] = useState("");
   const [whatYouNotice, setWhatYouNotice] = useState("");
   const [screenshots, setScreenshots] = useState<File[]>([]);
+  const [generatedPrompt, setGeneratedPrompt] = useState<string | null>(null);
 
   const canSubmit = Boolean(
     facebookUrl.trim() ||
@@ -38,13 +55,29 @@ export function OpportunityForm({ onSubmit, disabled }: Props) {
       screenshots.length > 0
   );
 
+  function handleModeChange(next: Mode) {
+    setMode(next);
+    setGeneratedPrompt(null);
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (mode !== "automatic") return;
     if (!canSubmit || disabled) return;
     onSubmit(
       { facebookUrl, instagramUrl, websiteUrl, notes, businessName, whatTheySell, whatYouNotice },
       screenshots
     );
+  }
+
+  function handleGeneratePrompt() {
+    if (!canSubmit || disabled) return;
+    const prompt = buildManualClaudePrompt(
+      { facebookUrl, instagramUrl, websiteUrl, notes, businessName, whatTheySell, whatYouNotice },
+      screenshots.length,
+      screenshots.map((file) => file.name)
+    );
+    setGeneratedPrompt(prompt);
   }
 
   return (
@@ -55,6 +88,52 @@ export function OpportunityForm({ onSubmit, disabled }: Props) {
       onSubmit={handleSubmit}
       className="w-full max-w-xl space-y-5"
     >
+      <div
+        role="radiogroup"
+        aria-label="Analysis mode"
+        className="grid grid-cols-1 gap-2 rounded-xl border border-zinc-800 bg-zinc-900/30 p-1 sm:grid-cols-2"
+      >
+        <button
+          type="button"
+          role="radio"
+          aria-checked={mode === "automatic"}
+          onClick={() => handleModeChange("automatic")}
+          disabled={disabled}
+          className={cn(
+            "flex flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left transition-colors disabled:pointer-events-none disabled:opacity-40",
+            mode === "automatic"
+              ? "bg-violet-600/15 ring-1 ring-violet-500/40"
+              : "hover:bg-zinc-800/50"
+          )}
+        >
+          <span className="flex items-center gap-1.5 text-sm font-medium text-zinc-100">
+            <Sparkles className="size-3.5 text-violet-400" />
+            Automatic Analysis
+          </span>
+          <span className="text-xs text-zinc-500">Uses our Anthropic API key — instant results in-app.</span>
+        </button>
+
+        <button
+          type="button"
+          role="radio"
+          aria-checked={mode === "claude-pro"}
+          onClick={() => handleModeChange("claude-pro")}
+          disabled={disabled}
+          className={cn(
+            "flex flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left transition-colors disabled:pointer-events-none disabled:opacity-40",
+            mode === "claude-pro"
+              ? "bg-violet-600/15 ring-1 ring-violet-500/40"
+              : "hover:bg-zinc-800/50"
+          )}
+        >
+          <span className="flex items-center gap-1.5 text-sm font-medium text-zinc-100">
+            <Copy className="size-3.5 text-violet-400" />
+            Claude Pro Mode
+          </span>
+          <span className="text-xs text-zinc-500">No API key — generate a prompt to paste into Claude Pro.</span>
+        </button>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="facebookUrl" className="flex items-center gap-2 text-sm text-zinc-400">
           <Link2 className="size-3.5" />
@@ -205,20 +284,47 @@ export function OpportunityForm({ onSubmit, disabled }: Props) {
         </AnimatePresence>
       </div>
 
-      <Button
-        type="submit"
-        disabled={!canSubmit || disabled}
-        size="lg"
-        className="w-full h-12 bg-violet-600 hover:bg-violet-500 text-white font-medium tracking-wide disabled:opacity-40"
-      >
-        <Sparkles className="size-4" />
-        ANALYZE OPPORTUNITY
-      </Button>
+      {mode === "automatic" ? (
+        <>
+          <Button
+            type="submit"
+            disabled={!canSubmit || disabled}
+            size="lg"
+            className="w-full h-12 bg-violet-600 hover:bg-violet-500 text-white font-medium tracking-wide disabled:opacity-40"
+          >
+            <Sparkles className="size-4" />
+            ANALYZE OPPORTUNITY
+          </Button>
 
-      {!canSubmit && (
-        <p className="text-center text-xs text-zinc-600">
-          Enter at least one link, some context, or a screenshot to continue.
-        </p>
+          {!canSubmit && (
+            <p className="text-center text-xs text-zinc-600">
+              Enter at least one link, some context, or a screenshot to continue.
+            </p>
+          )}
+        </>
+      ) : (
+        <>
+          <Button
+            type="button"
+            onClick={handleGeneratePrompt}
+            disabled={!canSubmit || disabled}
+            size="lg"
+            className="w-full h-12 bg-violet-600 hover:bg-violet-500 text-white font-medium tracking-wide disabled:opacity-40"
+          >
+            <Copy className="size-4" />
+            GENERATE PROMPT FOR CLAUDE
+          </Button>
+
+          <p className="text-center text-xs text-zinc-600">
+            {canSubmit
+              ? "No API key required — you'll paste this into your own Claude Pro account."
+              : "Enter at least one link, some context, or a screenshot to generate a prompt."}
+          </p>
+
+          {generatedPrompt && (
+            <ClaudeProPanel prompt={generatedPrompt} screenshotCount={screenshots.length} />
+          )}
+        </>
       )}
     </motion.form>
   );
